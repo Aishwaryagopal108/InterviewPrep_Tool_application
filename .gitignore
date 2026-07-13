@@ -1,0 +1,14 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# logs / local run artifacts
+*.log
+
+# editor / tooling
+.claude/
+.playwright-mcp/
