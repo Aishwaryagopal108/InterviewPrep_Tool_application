@@ -39,8 +39,9 @@ Only the backend ever holds the Groq API key. Never expose it in frontend code o
 3. FastAPI `/extract` endpoint (done)
 4. Frontend: upload page that calls `/upload` then `/extract` and renders the initiative dashboard from the response, held in browser memory
 5. On-demand generation endpoints: `/study`, `/story`, `/project-qa`, `/resume-qa` — each calls Groq live and returns the result directly, no DB write
-6. Test the full stateless prototype locally
-7. **(Phase 2, later)** Postgres schema in Supabase, wire extraction + generation output into the database, multi-resume support + `anon_id`, deploy to Render + connect Supabase
+6. Test the full stateless prototype locally (done)
+7. Push to GitHub, deploy the Phase 1 prototype to Render — backend as a web service, frontend as a static site, `GROQ_API_KEY` set as a Render environment variable (never committed), backend CORS locked to the deployed frontend origin (done — no Supabase involved, live at the two Render URLs)
+8. **(Phase 2, later)** Postgres schema in Supabase, wire extraction + generation output into the database, multi-resume support + `anon_id`, connect Supabase to the deployed backend
 
 ## Phase 2: persistence design (deferred, not built yet)
 No login/auth, no users table. Each browser will be anonymously identified by an `anon_id` (a UUID generated client-side and sent with every request) — this is how multiple people can use the same deployment without accounts, and how one browser's resumes stay separate from another's. **None of this exists in Phase 1** — the prototype has no concept of identity, sessions, or saved resumes at all.
