@@ -3,6 +3,8 @@ import os
 
 from groq import Groq
 
+from retry import retry_on_rate_limit
+
 MODEL = "openai/gpt-oss-120b"
 
 INITIATIVES_SCHEMA = {
@@ -57,6 +59,7 @@ __RESUME_TEXT__
 """
 
 
+@retry_on_rate_limit
 def extract_initiatives(resume_text: str) -> dict:
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
 

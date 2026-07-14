@@ -3,6 +3,8 @@ import os
 
 from groq import Groq
 
+from retry import retry_on_rate_limit
+
 MODEL = "openai/gpt-oss-120b"
 
 
@@ -10,6 +12,7 @@ def _client() -> Groq:
     return Groq(api_key=os.environ["GROQ_API_KEY"])
 
 
+@retry_on_rate_limit
 def _json_schema_call(*, prompt: str, schema_name: str, schema: dict) -> dict:
     response = _client().chat.completions.create(
         model=MODEL,
