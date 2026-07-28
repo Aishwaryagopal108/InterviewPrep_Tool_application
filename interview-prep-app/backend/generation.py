@@ -77,6 +77,12 @@ this concept THROUGH the lens of their project — not as generic textbook mater
 Hard rule: if a sentence you're about to write could apply to any resume that mentions \
 this concept, delete it and rewrite it so it only makes sense for THIS project.
 
+CRITICAL: Only state numbers, metrics, or dataset sizes that appear verbatim in the \
+project context provided below. If no specific figure is available for a claim, \
+describe it qualitatively instead (e.g., "achieved a reasonably low error suitable \
+for a baseline model" rather than inventing a dollar figure). Never estimate, round, \
+or generate a plausible-sounding number that isn't explicitly present in the context.
+
 Generate exactly 2-3 items in likely_questions and 1-2 items in follow_up_traps. \
 Every field must reference the project context provided — none should be answerable \
 without it.
@@ -171,6 +177,12 @@ STORY_PROMPT = """You are an expert interview coach. Write a STAR-style story th
 candidate can tell in an interview about this project/role, based only on the facts \
 given below. Do not invent facts not implied by the input.
 
+CRITICAL: Only state numbers, metrics, or dataset sizes that appear verbatim in the \
+project context provided below. If no specific figure is available for a claim, \
+describe it qualitatively instead (e.g., "achieved a reasonably low error suitable \
+for a baseline model" rather than inventing a dollar figure). Never estimate, round, \
+or generate a plausible-sounding number that isn't explicitly present in the context.
+
 Title: {title}
 Company: {company}
 Timeframe: {timeframe}
@@ -227,6 +239,12 @@ PROJECT_QA_PROMPT = """You are an expert interview coach. Generate likely interv
 questions and strong candidate answers about this specific project/role, based only \
 on the facts given below. Do not invent facts not implied by the input.
 
+CRITICAL: Only state numbers, metrics, or dataset sizes that appear verbatim in the \
+project context provided below. If no specific figure is available for a claim, \
+describe it qualitatively instead (e.g., "achieved a reasonably low error suitable \
+for a baseline model" rather than inventing a dollar figure). Never estimate, round, \
+or generate a plausible-sounding number that isn't explicitly present in the context.
+
 Title: {title}
 Company: {company}
 Timeframe: {timeframe}
@@ -256,6 +274,12 @@ RESUME_QA_PROMPT = """You are an expert interview coach. Based on this candidate
 full resume text below, generate likely resume-wide technical interview questions \
 and strong answers — the kind that span multiple projects or probe the candidate's \
 overall technical breadth, not questions about a single project in isolation.
+
+CRITICAL: Only state numbers, metrics, or dataset sizes that appear verbatim in the \
+resume text below. If no specific figure is available for a claim, describe it \
+qualitatively instead (e.g., "achieved a reasonably low error suitable for a \
+baseline model" rather than inventing a dollar figure). Never estimate, round, or \
+generate a plausible-sounding number that isn't explicitly present in the resume text.
 
 Resume text:
 ---
