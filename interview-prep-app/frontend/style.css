@@ -352,6 +352,37 @@ button { font-family: inherit; }
 .qa-item .q { font-weight: 700; margin-bottom: 4px; color: var(--text); font-size: 13px; }
 .qa-item .a { font-size: 13px; line-height: 1.6; color: var(--text-dim); }
 
+/* Study mode: fields worth calling out get their own boxed treatment */
+
+.highlight-box {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+.highlight-box h4 { color: var(--accent); margin-top: 0; }
+
+.warning-box {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 10px 0;
+}
+.warning-box h4 { color: var(--danger); margin-top: 0; }
+.warning-box:last-child { margin-bottom: 0; }
+
+.trap-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.trap-list li { margin-bottom: 6px; }
+.trap-list li:last-child { margin-bottom: 0; }
+
 .empty-panel {
   font-size: 13px;
   color: var(--text-dim);

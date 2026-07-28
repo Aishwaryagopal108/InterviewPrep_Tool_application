@@ -13,10 +13,15 @@ def _client() -> Groq:
 
 
 @retry_on_rate_limit
-def _json_schema_call(*, prompt: str, schema_name: str, schema: dict) -> dict:
+def _json_schema_call(*, prompt: str, schema_name: str, schema: dict, system: str | None = None) -> dict:
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
     response = _client().chat.completions.create(
         model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
+        messages=messages,
         temperature=0.3,
         response_format={
             "type": "json_schema",
@@ -30,54 +35,113 @@ def _json_schema_call(*, prompt: str, schema_name: str, schema: dict) -> dict:
     return json.loads(response.choices[0].message.content)
 
 
-# --- Study mode ---------------------------------------------------------
+# --- Study mode (project-grounded) ---------------------------------------
 
 STUDY_SCHEMA = {
     "type": "object",
     "properties": {
-        "explanation": {"type": "string"},
-        "why_it_matters": {"type": "string"},
-        "how_it_works": {"type": "string"},
-        "trade_offs": {"type": "string"},
-        "common_pitfalls": {"type": "string"},
-        "interview_angle": {"type": "string"},
+        "quick_definition": {"type": "string"},
+        "how_they_used_it": {"type": "string"},
+        "why_this_choice": {"type": "string"},
+        "likely_questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "model_answer": {"type": "string"},
+                },
+                "required": ["question", "model_answer"],
+                "additionalProperties": False,
+            },
+        },
+        "follow_up_traps": {"type": "array", "items": {"type": "string"}},
+        "avoid_saying": {"type": "string"},
     },
     "required": [
-        "explanation",
-        "why_it_matters",
-        "how_it_works",
-        "trade_offs",
-        "common_pitfalls",
-        "interview_angle",
+        "quick_definition",
+        "how_they_used_it",
+        "why_this_choice",
+        "likely_questions",
+        "follow_up_traps",
+        "avoid_saying",
     ],
     "additionalProperties": False,
 }
 
-STUDY_PROMPT = """You are an expert interview coach. Produce a multi-dimension study \
-deep dive on the concept "{concept}" so a candidate can confidently discuss it in a \
-technical interview.
+STUDY_SYSTEM_PROMPT = """You are preparing a candidate for a live technical interview \
+about their own project. You will be given one concept they used, the specific \
+project it came from, and what is known about that project. Your job is to explain \
+this concept THROUGH the lens of their project — not as generic textbook material.
 
-{context_block}
+Hard rule: if a sentence you're about to write could apply to any resume that mentions \
+this concept, delete it and rewrite it so it only makes sense for THIS project.
 
-Fill in each field:
-- explanation: a clear, precise explanation of the concept (2-4 sentences)
-- why_it_matters: why this concept matters in practice / when you'd reach for it
-- how_it_works: the mechanics, 3-5 sentences, technical but readable
-- trade_offs: trade-offs vs. alternatives
-- common_pitfalls: mistakes or misconceptions people commonly run into
-- interview_angle: how this concept is likely to come up in an interview, including \
-one example question an interviewer might ask about it
+Generate exactly 2-3 items in likely_questions and 1-2 items in follow_up_traps. \
+Every field must reference the project context provided — none should be answerable \
+without it.
+
+Field guide:
+- quick_definition: 2 sentences max, plain language, no jargon
+- how_they_used_it: grounded specifically in their project. Reference their actual \
+numbers, method choices, and what problem it solved for them. This is the most \
+important field — never leave it generic.
+- why_this_choice: what alternative existed, and why theirs was the better call for \
+this specific situation. Frame as the argument they'd make to defend the decision, \
+not a list of pros/cons.
+- likely_questions: a question an interviewer would plausibly ask about this concept \
+in the context of their project, with a tight, confident model_answer anchored to \
+their actual project details.
+- follow_up_traps: a deeper probing question that goes one level past the obvious \
+answer, phrased as "be ready for this" — the kind of question that catches people who \
+only know the concept at surface level.
+- avoid_saying: one specific, concrete misstatement this candidate could make about \
+THEIR project (not a generic pitfall) that would make an interviewer doubt they \
+actually did the work.
+"""
+
+STUDY_PROMPT = """Concept: {concept}
+Project: {project_name}
+
+Full project context:
+- Company: {company}
+- Timeframe: {timeframe}
+- Description: {description}
+- Tags/technologies: {tags}
+{star_context}
+
+Generate the interview prep explanation for this concept.
 """
 
 
-def generate_study(concept: str, context: str | None = None) -> dict:
-    context_block = (
-        f'The candidate encountered this concept in the context of: "{context}"'
-        if context
-        else "No additional project context was given — explain the concept generally."
+def generate_study(concept: str, initiative: dict, story: dict | None = None) -> dict:
+    star_context = ""
+    if story:
+        star_lines = []
+        if story.get("objective"):
+            star_lines.append(f"- Objective: {story['objective']}")
+        if story.get("methodology"):
+            star_lines.append(f"- Methodology: {story['methodology']}")
+        if story.get("results"):
+            star_lines.append(f"- Results: {story['results']}")
+        if star_lines:
+            star_context = "\n" + "\n".join(star_lines)
+
+    prompt = STUDY_PROMPT.format(
+        concept=concept,
+        project_name=initiative["title"],
+        company=initiative["company"],
+        timeframe=initiative.get("timeframe") or "not specified",
+        description=initiative["description"],
+        tags=", ".join(initiative.get("tags", [])),
+        star_context=star_context,
     )
-    prompt = STUDY_PROMPT.format(concept=concept, context_block=context_block)
-    return _json_schema_call(prompt=prompt, schema_name="study_deep_dive", schema=STUDY_SCHEMA)
+    return _json_schema_call(
+        prompt=prompt,
+        schema_name="study_deep_dive",
+        schema=STUDY_SCHEMA,
+        system=STUDY_SYSTEM_PROMPT,
+    )
 
 
 # --- Story mode (STAR-style) --------------------------------------------

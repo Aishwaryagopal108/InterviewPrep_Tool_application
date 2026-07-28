@@ -43,9 +43,16 @@ class InitiativeInput(BaseModel):
     tags: list[str] = []
 
 
+class StoryContext(BaseModel):
+    objective: str | None = None
+    methodology: str | None = None
+    results: str | None = None
+
+
 class StudyRequest(BaseModel):
     concept: str
-    context: str | None = None
+    initiative: InitiativeInput
+    story: StoryContext | None = None
 
 
 class ResumeQARequest(BaseModel):
@@ -88,7 +95,8 @@ async def study(request: StudyRequest):
         raise HTTPException(status_code=422, detail="concept must not be empty")
 
     try:
-        return generate_study(request.concept, request.context)
+        story = request.story.model_dump() if request.story else None
+        return generate_study(request.concept, request.initiative.model_dump(), story)
     except Exception:
         raise HTTPException(status_code=502, detail="Study generation failed")
 

@@ -21,6 +21,17 @@ function escapeHTML(str) {
   return div.innerHTML;
 }
 
+function initiativePayload(initiative) {
+  return {
+    title: initiative.title,
+    company: initiative.company,
+    timeframe: initiative.timeframe,
+    description: initiative.description,
+    concepts: initiative.concepts || [],
+    tags: initiative.tags || [],
+  };
+}
+
 async function postJSON(path, body) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
@@ -221,10 +232,11 @@ function renderDashboardView() {
     <p class="view-subheading">Click an initiative to study its concepts, build your story, and prep Q&amp;A.</p>
 
     <div class="info-box">
-      Each initiative has two prep modes plus per-concept study: <strong>Study</strong>
-      (a 6-dimension deep dive on each concept), <strong>Story</strong> (how to narrate the
-      project out loud), and <strong>Q&amp;A</strong> (likely interview questions with strong
-      answers). Nothing here is saved — it's regenerated live from Groq each session.
+      Each initiative has three prep modes: <strong>Study</strong> (a project-grounded
+      deep dive per concept — how you actually used it, likely questions, and traps to
+      avoid), <strong>Story</strong> (how to narrate the project out loud), and
+      <strong>Q&amp;A</strong> (likely interview questions with strong answers).
+      Nothing here is saved — it's regenerated live from Groq each session.
     </div>
 
     <div class="grid">${cards}</div>
@@ -341,15 +353,43 @@ function renderTabPanel(initiative) {
 }
 
 function renderStudyContent(data) {
-  const sections = [
-    ["Explanation", data.explanation],
-    ["Why it matters", data.why_it_matters],
-    ["How it works", data.how_it_works],
-    ["Trade-offs", data.trade_offs],
-    ["Common pitfalls", data.common_pitfalls],
-    ["Interview angle", data.interview_angle],
-  ];
-  return sections.map(([label, text]) => `<h4>${label}</h4><p>${escapeHTML(text)}</p>`).join("");
+  const questions = (data.likely_questions || [])
+    .map(
+      (qa) => `
+      <div class="qa-item">
+        <div class="q">${escapeHTML(qa.question)}</div>
+        <div class="a">${escapeHTML(qa.model_answer)}</div>
+      </div>`
+    )
+    .join("");
+
+  const traps = (data.follow_up_traps || [])
+    .map((t) => `<li>${escapeHTML(t)}</li>`)
+    .join("");
+
+  return `
+    <h4>Quick definition</h4><p>${escapeHTML(data.quick_definition)}</p>
+
+    <div class="highlight-box">
+      <h4>How they used it</h4><p>${escapeHTML(data.how_they_used_it)}</p>
+    </div>
+
+    <h4>Why this choice</h4><p>${escapeHTML(data.why_this_choice)}</p>
+
+    <div class="highlight-box">
+      <h4>Likely questions</h4>
+      ${questions}
+    </div>
+
+    <div class="warning-box">
+      <h4>Follow-up traps</h4>
+      <ul class="trap-list">${traps}</ul>
+    </div>
+
+    <div class="warning-box">
+      <h4>Avoid saying</h4><p>${escapeHTML(data.avoid_saying)}</p>
+    </div>
+  `;
 }
 
 function renderQAPairs(pairs) {
@@ -428,7 +468,18 @@ document.getElementById("app").addEventListener("click", async (e) => {
       initiative._studyByConcept[concept] = "loading";
       render();
       try {
-        const data = await postJSON("/study", { concept, context: initiative.description });
+        const hasStory = initiative._story && typeof initiative._story === "object";
+        const data = await postJSON("/study", {
+          concept,
+          initiative: initiativePayload(initiative),
+          story: hasStory
+            ? {
+                objective: initiative._story.objective,
+                methodology: initiative._story.methodology,
+                results: initiative._story.results,
+              }
+            : null,
+        });
         initiative._studyByConcept[concept] = data;
       } catch {
         initiative._studyByConcept[concept] = "error";
