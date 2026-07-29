@@ -1,4 +1,5 @@
 import io
+from typing import Literal
 
 import pdfplumber
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ from groq import RateLimitError
 from pydantic import BaseModel
 
 from audio import generate_audio
+from chat import chat as run_chat
 from extraction import extract_initiatives
 from generation import (
     generate_project_qa,
@@ -64,6 +66,19 @@ class ResumeQARequest(BaseModel):
 
 class AudioRequest(BaseModel):
     text: str
+
+
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatTurn] = []
+    current_initiative: InitiativeInput | None = None
+    current_concept: str | None = None
+    other_initiative_titles: list[str] = []
 
 
 @app.post("/upload")
@@ -148,3 +163,24 @@ async def generate_audio_route(request: AudioRequest):
         raise HTTPException(status_code=502, detail="Audio generation failed")
 
     return Response(content=audio_bytes, media_type="audio/wav")
+
+
+@app.post("/chat")
+async def chat_route(request: ChatRequest):
+    if not request.message.strip():
+        raise HTTPException(status_code=422, detail="message must not be empty")
+
+    try:
+        reply = run_chat(
+            message=request.message,
+            history=[turn.model_dump() for turn in request.history],
+            current_initiative=request.current_initiative.model_dump()
+            if request.current_initiative
+            else None,
+            current_concept=request.current_concept,
+            other_titles=request.other_initiative_titles,
+        )
+    except Exception:
+        raise HTTPException(status_code=502, detail="Chat failed")
+
+    return {"reply": reply}

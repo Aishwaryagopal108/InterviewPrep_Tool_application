@@ -227,6 +227,8 @@ function renderUploadView() {
         _qaPairs: null,
         _studyByConcept: {},
         _visited: false,
+        _chatHistory: [],
+        _chatPending: false,
       }));
 
       state.view = "dashboard";
@@ -297,6 +299,7 @@ function renderDetailView() {
       <button class="tab-btn ${state.currentTab === "study" ? "active" : ""}" data-action="select-tab" data-tab="study">Study</button>
       <button class="tab-btn ${state.currentTab === "story" ? "active" : ""}" data-action="select-tab" data-tab="story">Story</button>
       <button class="tab-btn ${state.currentTab === "qa" ? "active" : ""}" data-action="select-tab" data-tab="qa">Q&amp;A</button>
+      <button class="tab-btn ${state.currentTab === "chat" ? "active" : ""}" data-action="select-tab" data-tab="chat">Chat</button>
     </div>
 
     <div class="tab-panel" id="tab-panel"></div>
@@ -382,7 +385,87 @@ function renderTabPanel(initiative) {
         <button class="btn btn-ghost" data-action="generate-qa">Regenerate</button>
       `;
     }
+    return;
   }
+
+  if (state.currentTab === "chat") {
+    panel.innerHTML = renderChatPanel(initiative);
+    bindChatForm(initiative);
+  }
+}
+
+function renderChatPanel(initiative) {
+  const history = initiative._chatHistory || [];
+  const bubbles = history
+    .map(
+      (m) => `
+      <div class="chat-msg ${m.role}">
+        <div class="chat-bubble">${escapeHTML(m.content)}</div>
+      </div>`
+    )
+    .join("");
+
+  const pending = initiative._chatPending
+    ? `<div class="chat-msg assistant"><div class="chat-bubble chat-pending">Thinking...</div></div>`
+    : "";
+
+  const empty =
+    history.length === 0 && !initiative._chatPending
+      ? `<div class="empty-panel">Ask anything about this project, or a general concept question.</div>`
+      : "";
+
+  return `
+    <div class="chat-container">
+      <div class="chat-messages" id="chat-messages">${empty}${bubbles}${pending}</div>
+      <form id="chat-form" class="chat-form">
+        <input type="text" id="chat-input" placeholder="Ask a question..." autocomplete="off"
+               ${initiative._chatPending ? "disabled" : ""} />
+        <button type="submit" class="btn btn-primary" ${initiative._chatPending ? "disabled" : ""}>Send</button>
+      </form>
+    </div>
+  `;
+}
+
+function bindChatForm(initiative) {
+  const messagesEl = document.getElementById("chat-messages");
+  if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  const form = document.getElementById("chat-form");
+  const input = document.getElementById("chat-input");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const message = input.value.trim();
+    if (!message || initiative._chatPending) return;
+
+    const historyBeforeThisMessage = [...initiative._chatHistory];
+    initiative._chatHistory.push({ role: "user", content: message });
+    initiative._chatPending = true;
+    render();
+
+    try {
+      const otherTitles = state.initiatives
+        .filter((_, i) => i !== state.currentIndex)
+        .map((i) => `${i.title} @ ${i.company}`);
+
+      const data = await postJSON("/chat", {
+        message,
+        history: historyBeforeThisMessage,
+        current_initiative: initiativePayload(initiative),
+        current_concept: state.selectedConcept || null,
+        other_initiative_titles: otherTitles,
+      });
+      initiative._chatHistory.push({ role: "assistant", content: data.reply });
+    } catch (err) {
+      initiative._chatHistory.push({
+        role: "assistant",
+        content: `Sorry, something went wrong: ${err.message}`,
+      });
+    }
+    initiative._chatPending = false;
+    render();
+  });
 }
 
 function renderStudyContent(data) {
@@ -491,7 +574,6 @@ document.getElementById("app").addEventListener("click", async (e) => {
 
   if (action === "select-tab") {
     state.currentTab = target.dataset.tab;
-    state.selectedConcept = null;
     return render();
   }
 

@@ -396,6 +396,69 @@ button { font-family: inherit; }
   font-style: italic;
 }
 
+/* Chat tab */
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 480px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px;
+}
+
+.chat-msg { display: flex; }
+.chat-msg.user { justify-content: flex-end; }
+.chat-msg.assistant { justify-content: flex-start; }
+
+.chat-bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.chat-msg.user .chat-bubble {
+  background: var(--accent);
+  color: #1a1204;
+  border-bottom-right-radius: 2px;
+}
+
+.chat-msg.assistant .chat-bubble {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-bottom-left-radius: 2px;
+}
+
+.chat-pending { font-style: italic; color: var(--text-dim); }
+
+.chat-form { display: flex; gap: 8px; }
+
+.chat-form input[type="text"] {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.chat-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .empty-panel {
   font-size: 13px;
   color: var(--text-dim);
