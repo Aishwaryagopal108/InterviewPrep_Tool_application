@@ -4,8 +4,10 @@ import pdfplumber
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 
+from audio import generate_audio
 from extraction import extract_initiatives
 from generation import (
     generate_project_qa,
@@ -57,6 +59,10 @@ class StudyRequest(BaseModel):
 
 class ResumeQARequest(BaseModel):
     resume_text: str
+
+
+class AudioRequest(BaseModel):
+    text: str
 
 
 @app.post("/upload")
@@ -126,3 +132,16 @@ async def resume_qa(request: ResumeQARequest):
         return generate_resume_qa(request.resume_text)
     except Exception:
         raise HTTPException(status_code=502, detail="Resume Q&A generation failed")
+
+
+@app.post("/generate-audio")
+async def generate_audio_route(request: AudioRequest):
+    if not request.text.strip():
+        raise HTTPException(status_code=422, detail="text must not be empty")
+
+    try:
+        audio_bytes = generate_audio(request.text)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Audio generation failed")
+
+    return Response(content=audio_bytes, media_type="audio/wav")

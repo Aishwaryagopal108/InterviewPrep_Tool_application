@@ -383,6 +383,19 @@ button { font-family: inherit; }
 .trap-list li { margin-bottom: 6px; }
 .trap-list li:last-child { margin-bottom: 0; }
 
+.audio-player {
+  width: 100%;
+  height: 36px;
+  margin: 2px 0 4px;
+}
+
+.audio-status {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 2px 0 4px;
+  font-style: italic;
+}
+
 .empty-panel {
   font-size: 13px;
   color: var(--text-dim);

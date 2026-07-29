@@ -28,10 +28,11 @@ Only the backend ever holds the Groq API key. Never expose it in frontend code o
 2. Browser immediately sends that text to `POST /extract` -> Groq returns structured JSON: a list of initiatives, each with title, company, timeframe, description, concepts, tags
 3. The frontend renders the initiative dashboard (card grid) directly from that response — no database involved
 4. On demand, per card/concept, the browser calls a generation endpoint and renders the result live. Nothing is cached, so re-triggering the same generation calls Groq again:
-   - `POST /study` — a multi-dimension deep dive per concept
+   - `POST /study` — a project-grounded deep dive per concept
    - `POST /story` — objective / data / methodology / results / challenges / future scope per initiative
    - `POST /project-qa` — likely interview questions + strong answers per initiative
    - `POST /resume-qa` — resume-wide technical Q&A, using the full resume text already held in browser memory
+5. "Listen mode": right after a Study or Story generation succeeds, the browser automatically sends that content's narration text to `POST /generate-audio` (Groq TTS, `canopylabs/orpheus-v1-english`) and renders an `<audio controls>` element next to the text. The endpoint returns raw WAV bytes directly — nothing is written to disk — and the frontend turns them into a `blob:` URL via `URL.createObjectURL`, revoked on regenerate to avoid leaking memory.
 
 ## Build order (Phase 1)
 1. Throwaway script: resume text in -> Groq call -> structured JSON out. (done)
@@ -41,7 +42,8 @@ Only the backend ever holds the Groq API key. Never expose it in frontend code o
 5. On-demand generation endpoints: `/study`, `/story`, `/project-qa`, `/resume-qa` — each calls Groq live and returns the result directly, no DB write
 6. Test the full stateless prototype locally (done)
 7. Push to GitHub, deploy the Phase 1 prototype to Render — backend as a web service, frontend as a static site, `GROQ_API_KEY` set as a Render environment variable (never committed), backend CORS locked to the deployed frontend origin (done — no Supabase involved, live at the two Render URLs)
-8. **(Phase 2, later)** Postgres schema in Supabase, wire extraction + generation output into the database, multi-resume support + `anon_id`, connect Supabase to the deployed backend
+8. Listen mode: `/generate-audio` (Groq TTS) called automatically after Study/Story generation, rendered as an `<audio>` element (done)
+9. **(Phase 2, later)** Postgres schema in Supabase, wire extraction + generation output into the database, multi-resume support + `anon_id`, connect Supabase to the deployed backend
 
 ## Phase 2: persistence design (deferred, not built yet)
 No login/auth, no users table. Each browser will be anonymously identified by an `anon_id` (a UUID generated client-side and sent with every request) — this is how multiple people can use the same deployment without accounts, and how one browser's resumes stay separate from another's. **None of this exists in Phase 1** — the prototype has no concept of identity, sessions, or saved resumes at all.
@@ -63,6 +65,8 @@ On first visit in Phase 2, the frontend will generate a random `anon_id` via `cr
 - Multi-user support (Phase 2) will be anonymous per-browser identification via `anon_id` — not accounts, not login. This replaces the earlier "Phase 2 multi-user" auth plan entirely; there is no plan to add real login/accounts on top of this later.
 - Building stateless first (Phase 1) before persistence (Phase 2): validates the full user-facing flow — upload, extraction quality, dashboard rendering, and all four generation prompts — before investing in schema design, migrations, and caching logic. Phase 2's design is already settled (above) so the switch-over is mechanical.
 - Study mode is project-grounded, not a generic concept explainer: `/study` takes the concept plus the initiative's own fields (and the cached STAR story, if already generated this session) and is instructed to reject any sentence that could apply to any resume mentioning that concept. It does not use a separate per-concept "evidence line" — extraction only captures concept names at the initiative level, and extending it to capture verbatim resume lines per concept was deliberately deferred (would touch `INITIATIVES_SCHEMA` and need re-validation) in favor of shipping with the initiative's existing description/tags as context.
+- Every generation prompt (Study, Story, Project Q&A, Resume Q&A) requires numbers/metrics to appear verbatim in the given context, with an explicit instruction to describe qualitatively rather than invent a plausible-sounding figure when no specific number is available.
+- `/generate-audio` (Groq TTS, `canopylabs/orpheus-v1-english`, voice `autumn` — one of a fixed set of six voice names the model accepts, not a free-text field) returns WAV bytes directly rather than saving to disk and returning a URL/path. This avoids needing a static-file-serving route and matches Phase 1's "nothing persisted" design; Render's free-tier disk is ephemeral anyway. The `canopylabs/orpheus-v1-english` model requires terms acceptance in the Groq console before the API key can use it (one-time, per Groq account).
 
 ## Rules to hold to
 - API keys only ever live in the backend's `.env`, never in frontend code, never committed to git

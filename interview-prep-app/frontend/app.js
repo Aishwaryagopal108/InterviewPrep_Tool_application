@@ -45,6 +45,30 @@ async function postJSON(path, body) {
   return res.json();
 }
 
+async function fetchAudioUrl(text) {
+  const res = await fetch(`${API_BASE}/generate-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  if (!res.ok) throw new Error("Audio generation failed");
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+function revokeIfBlobUrl(url) {
+  if (typeof url === "string" && url.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function renderAudioPlayer(audioUrl) {
+  if (audioUrl === "loading") return `<p class="audio-status">Generating audio...</p>`;
+  if (audioUrl === "error") return `<p class="audio-status">Audio unavailable</p>`;
+  if (!audioUrl) return "";
+  return `<audio controls src="${audioUrl}" class="audio-player"></audio>`;
+}
+
 // ---------- Navigation ----------
 
 function goHome() {
@@ -326,6 +350,7 @@ function renderTabPanel(initiative) {
         <div class="content-box">
           ${sections.map(([label, text]) => `<h4>${label}</h4><p>${escapeHTML(text)}</p>`).join("")}
         </div>
+        ${renderAudioPlayer(s.audioUrl)}
         <button class="btn btn-ghost" data-action="generate-story">Regenerate</button>
       `;
     }
@@ -368,6 +393,8 @@ function renderStudyContent(data) {
     .join("");
 
   return `
+    ${renderAudioPlayer(data.audioUrl)}
+
     <h4>Quick definition</h4><p>${escapeHTML(data.quick_definition)}</p>
 
     <div class="highlight-box">
@@ -481,6 +508,16 @@ document.getElementById("app").addEventListener("click", async (e) => {
             : null,
         });
         initiative._studyByConcept[concept] = data;
+        render();
+
+        data.audioUrl = "loading";
+        render();
+        try {
+          const narration = [data.quick_definition, data.how_they_used_it, data.why_this_choice].join(" ");
+          data.audioUrl = await fetchAudioUrl(narration);
+        } catch {
+          data.audioUrl = "error";
+        }
       } catch {
         initiative._studyByConcept[concept] = "error";
       }
@@ -493,10 +530,30 @@ document.getElementById("app").addEventListener("click", async (e) => {
 
   if (action === "generate-story") {
     const initiative = state.initiatives[state.currentIndex];
+    if (initiative._story && typeof initiative._story === "object") {
+      revokeIfBlobUrl(initiative._story.audioUrl);
+    }
     initiative._story = "loading";
     render();
     try {
       initiative._story = await postJSON("/story", initiative);
+      render();
+
+      initiative._story.audioUrl = "loading";
+      render();
+      try {
+        const narration = [
+          initiative._story.objective,
+          initiative._story.data,
+          initiative._story.methodology,
+          initiative._story.results,
+          initiative._story.challenges,
+          initiative._story.future_scope,
+        ].join(" ");
+        initiative._story.audioUrl = await fetchAudioUrl(narration);
+      } catch {
+        initiative._story.audioUrl = "error";
+      }
     } catch {
       initiative._story = "error";
     }
