@@ -51,7 +51,14 @@ async function fetchAudioUrl(text) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   });
-  if (!res.ok) throw new Error("Audio generation failed");
+  if (!res.ok) {
+    if (res.status === 429) {
+      const err = new Error("Daily audio quota reached");
+      err.isQuota = true;
+      throw err;
+    }
+    throw new Error("Audio generation failed");
+  }
   const blob = await res.blob();
   return URL.createObjectURL(blob);
 }
@@ -64,6 +71,7 @@ function revokeIfBlobUrl(url) {
 
 function renderAudioPlayer(audioUrl) {
   if (audioUrl === "loading") return `<p class="audio-status">Generating audio...</p>`;
+  if (audioUrl === "quota") return `<p class="audio-status">Daily audio quota reached — try again later.</p>`;
   if (audioUrl === "error") return `<p class="audio-status">Audio unavailable</p>`;
   if (!audioUrl) return "";
   return `<audio controls src="${audioUrl}" class="audio-player"></audio>`;
@@ -515,8 +523,8 @@ document.getElementById("app").addEventListener("click", async (e) => {
         try {
           const narration = [data.quick_definition, data.how_they_used_it, data.why_this_choice].join(" ");
           data.audioUrl = await fetchAudioUrl(narration);
-        } catch {
-          data.audioUrl = "error";
+        } catch (err) {
+          data.audioUrl = err.isQuota ? "quota" : "error";
         }
       } catch {
         initiative._studyByConcept[concept] = "error";
@@ -551,8 +559,8 @@ document.getElementById("app").addEventListener("click", async (e) => {
           initiative._story.future_scope,
         ].join(" ");
         initiative._story.audioUrl = await fetchAudioUrl(narration);
-      } catch {
-        initiative._story.audioUrl = "error";
+      } catch (err) {
+        initiative._story.audioUrl = err.isQuota ? "quota" : "error";
       }
     } catch {
       initiative._story = "error";

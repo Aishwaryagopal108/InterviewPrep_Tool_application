@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from groq import RateLimitError
 from pydantic import BaseModel
 
 from audio import generate_audio
@@ -141,6 +142,8 @@ async def generate_audio_route(request: AudioRequest):
 
     try:
         audio_bytes = generate_audio(request.text)
+    except RateLimitError:
+        raise HTTPException(status_code=429, detail="Daily audio quota reached. Try again later.")
     except Exception:
         raise HTTPException(status_code=502, detail="Audio generation failed")
 
