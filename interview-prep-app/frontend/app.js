@@ -4,16 +4,27 @@
 // all lost on refresh.
 const state = {
   resumeText: null,
-  initiatives: [], // each gets _story, _qaPairs, _studyByConcept, _visited attached as generated
+  initiatives: [], // each gets _story, _qaPairs, _studyByConcept, _chatHistory, _visited attached as generated
   resumeQA: null,
   view: "upload", // upload | dashboard | detail | resume-qa
   currentIndex: null,
   currentTab: "study",
   selectedConcept: null,
+  chatOpen: false, // floating chat widget expanded/collapsed
+  generalChatHistory: [], // chat thread used when no project is currently open
+  generalChatPending: false,
 };
 
 const sidebarEl = document.getElementById("sidebar");
 const mainEl = document.getElementById("main-content");
+const chatWidgetEl = document.getElementById("chat-widget");
+
+// The project currently open on screen, or null (e.g. on the dashboard) - the
+// floating chat widget uses this to decide whether to scope itself to a
+// project or fall back to general chat.
+function getCurrentInitiative() {
+  return state.view === "detail" ? state.initiatives[state.currentIndex] : null;
+}
 
 function escapeHTML(str) {
   const div = document.createElement("div");
@@ -106,6 +117,9 @@ function startOver() {
   state.currentIndex = null;
   state.currentTab = "study";
   state.selectedConcept = null;
+  state.chatOpen = false;
+  state.generalChatHistory = [];
+  state.generalChatPending = false;
   render();
 }
 
@@ -299,7 +313,6 @@ function renderDetailView() {
       <button class="tab-btn ${state.currentTab === "study" ? "active" : ""}" data-action="select-tab" data-tab="study">Study</button>
       <button class="tab-btn ${state.currentTab === "story" ? "active" : ""}" data-action="select-tab" data-tab="story">Story</button>
       <button class="tab-btn ${state.currentTab === "qa" ? "active" : ""}" data-action="select-tab" data-tab="qa">Q&amp;A</button>
-      <button class="tab-btn ${state.currentTab === "chat" ? "active" : ""}" data-action="select-tab" data-tab="chat">Chat</button>
     </div>
 
     <div class="tab-panel" id="tab-panel"></div>
@@ -385,17 +398,66 @@ function renderTabPanel(initiative) {
         <button class="btn btn-ghost" data-action="generate-qa">Regenerate</button>
       `;
     }
-    return;
-  }
-
-  if (state.currentTab === "chat") {
-    panel.innerHTML = renderChatPanel(initiative);
-    bindChatForm(initiative);
   }
 }
 
-function renderChatPanel(initiative) {
-  const history = initiative._chatHistory || [];
+// ---------- Floating chat widget (global, not scoped to a single view) ----------
+
+function getChatHistory(initiative) {
+  if (initiative) {
+    if (!initiative._chatHistory) initiative._chatHistory = [];
+    return initiative._chatHistory;
+  }
+  return state.generalChatHistory;
+}
+
+function isChatPending(initiative) {
+  return initiative ? !!initiative._chatPending : state.generalChatPending;
+}
+
+function setChatPending(initiative, value) {
+  if (initiative) initiative._chatPending = value;
+  else state.generalChatPending = value;
+}
+
+function renderChatWidget() {
+  if (!chatWidgetEl) return;
+
+  // Nothing to chat about until a resume has been analyzed.
+  if (state.view === "upload") {
+    chatWidgetEl.innerHTML = "";
+    return;
+  }
+
+  const activeInitiative = getCurrentInitiative();
+  const contextLabel = activeInitiative
+    ? `Chatting about: ${escapeHTML(activeInitiative.title)}`
+    : "General chat";
+
+  const panelHtml = state.chatOpen
+    ? `
+    <div class="chat-panel">
+      <div class="chat-panel-header">
+        <span>${contextLabel}</span>
+        <button class="chat-panel-close" data-action="toggle-chat" aria-label="Close chat">&times;</button>
+      </div>
+      ${renderChatBody(activeInitiative)}
+    </div>`
+    : "";
+
+  chatWidgetEl.innerHTML = `
+    ${panelHtml}
+    <button id="chat-toggle" class="chat-toggle-btn" data-action="toggle-chat"
+            aria-label="${state.chatOpen ? "Close chat" : "Open chat"}">💬</button>
+  `;
+
+  if (state.chatOpen) bindChatWidgetForm(activeInitiative);
+}
+
+function renderChatBody(initiative) {
+  const history = getChatHistory(initiative);
+  const pending = isChatPending(initiative);
+
   const bubbles = history
     .map(
       (m) => `
@@ -405,65 +467,66 @@ function renderChatPanel(initiative) {
     )
     .join("");
 
-  const pending = initiative._chatPending
+  const pendingHtml = pending
     ? `<div class="chat-msg assistant"><div class="chat-bubble chat-pending">Thinking...</div></div>`
     : "";
 
   const empty =
-    history.length === 0 && !initiative._chatPending
-      ? `<div class="empty-panel">Ask anything about this project, or a general concept question.</div>`
+    history.length === 0 && !pending
+      ? `<div class="empty-panel">${
+          initiative
+            ? "Ask anything about this project."
+            : "Ask a general question, or open a project to chat about it specifically."
+        }</div>`
       : "";
 
   return `
-    <div class="chat-container">
-      <div class="chat-messages" id="chat-messages">${empty}${bubbles}${pending}</div>
-      <form id="chat-form" class="chat-form">
-        <input type="text" id="chat-input" placeholder="Ask a question..." autocomplete="off"
-               ${initiative._chatPending ? "disabled" : ""} />
-        <button type="submit" class="btn btn-primary" ${initiative._chatPending ? "disabled" : ""}>Send</button>
-      </form>
-    </div>
+    <div class="chat-messages" id="widget-chat-messages">${empty}${bubbles}${pendingHtml}</div>
+    <form id="widget-chat-form" class="chat-form">
+      <input type="text" id="widget-chat-input" placeholder="Ask a question..." autocomplete="off"
+             ${pending ? "disabled" : ""} />
+      <button type="submit" class="btn btn-primary" ${pending ? "disabled" : ""}>Send</button>
+    </form>
   `;
 }
 
-function bindChatForm(initiative) {
-  const messagesEl = document.getElementById("chat-messages");
+function bindChatWidgetForm(initiative) {
+  const messagesEl = document.getElementById("widget-chat-messages");
   if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
 
-  const form = document.getElementById("chat-form");
-  const input = document.getElementById("chat-input");
+  const form = document.getElementById("widget-chat-form");
+  const input = document.getElementById("widget-chat-input");
   if (!form) return;
+  input.focus();
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const message = input.value.trim();
-    if (!message || initiative._chatPending) return;
+    if (!message || isChatPending(initiative)) return;
 
-    const historyBeforeThisMessage = [...initiative._chatHistory];
-    initiative._chatHistory.push({ role: "user", content: message });
-    initiative._chatPending = true;
+    const history = getChatHistory(initiative);
+    const historyBeforeThisMessage = [...history];
+    history.push({ role: "user", content: message });
+    setChatPending(initiative, true);
     render();
 
     try {
       const otherTitles = state.initiatives
-        .filter((_, i) => i !== state.currentIndex)
+        .filter((i) => i !== initiative)
         .map((i) => `${i.title} @ ${i.company}`);
 
       const data = await postJSON("/chat", {
         message,
         history: historyBeforeThisMessage,
-        current_initiative: initiativePayload(initiative),
-        current_concept: state.selectedConcept || null,
+        current_initiative: initiative ? initiativePayload(initiative) : null,
+        current_concept: initiative ? state.selectedConcept || null : null,
         other_initiative_titles: otherTitles,
       });
-      initiative._chatHistory.push({ role: "assistant", content: data.reply });
+      history.push({ role: "assistant", content: data.reply });
     } catch (err) {
-      initiative._chatHistory.push({
-        role: "assistant",
-        content: `Sorry, something went wrong: ${err.message}`,
-      });
+      history.push({ role: "assistant", content: `Sorry, something went wrong: ${err.message}` });
     }
-    initiative._chatPending = false;
+    setChatPending(initiative, false);
     render();
   });
 }
@@ -558,11 +621,14 @@ function render() {
   else if (state.view === "dashboard") renderDashboardView();
   else if (state.view === "detail") renderDetailView();
   else if (state.view === "resume-qa") renderResumeQAView();
+  renderChatWidget();
 }
 
 // ---------- Delegated actions ----------
+// Bound to document.body (not just #app) so it also covers #chat-widget,
+// which sits outside #app so it persists across every view.
 
-document.getElementById("app").addEventListener("click", async (e) => {
+document.body.addEventListener("click", async (e) => {
   const target = e.target.closest("[data-action]");
   if (!target) return;
   const action = target.dataset.action;
@@ -571,6 +637,11 @@ document.getElementById("app").addEventListener("click", async (e) => {
   if (action === "nav-resume-qa") return goToResumeQA();
   if (action === "start-over") return startOver();
   if (action === "nav-initiative") return goToInitiative(Number(target.dataset.index));
+
+  if (action === "toggle-chat") {
+    state.chatOpen = !state.chatOpen;
+    return render();
+  }
 
   if (action === "select-tab") {
     state.currentTab = target.dataset.tab;
